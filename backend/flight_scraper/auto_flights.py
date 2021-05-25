@@ -1,6 +1,6 @@
 #!/Users/ashhadghazi/react/auto_flights/backend/flight_scraper/venv/bin/python
 
-import sys, json, base64, argparse
+import sys, json, base64, argparse, concurrent.futures
 from datetime import datetime, timedelta
 from AutoWeb import AutoWeb
 from flight_parser import get_parsed_flights
@@ -59,6 +59,7 @@ def get_all_flights(src_airport, dest_airport, depart_date, return_date):
 
 def generate_flights_maps(src_airport, dest_airport, depart_date, return_date, duration):
     flight_maps = []
+    params_list = []
     start_date = datetime.strptime(depart_date, '%Y-%m-%d')
     end_date = datetime.strptime(return_date, '%Y-%m-%d')
     days = (end_date - start_date).days
@@ -69,12 +70,17 @@ def generate_flights_maps(src_airport, dest_airport, depart_date, return_date, d
         depart_string = datetime.strftime(depart, '%Y-%m-%d')
         ret_string = datetime.strftime(ret, '%Y-%m-%d')
 
-        flights = get_all_flights(src_airport, dest_airport, bytes(depart_string, 'utf-8'), bytes(ret_string, 'utf-8'))
+        params_list.append((src_airport, dest_airport, bytes(depart_string, 'utf-8'), bytes(ret_string, 'utf-8')))
         flight_map['depart_date'] = depart_string
         flight_map['return_date'] = ret_string
-        flight_map['flights'] = flights
 
         flight_maps.append(flight_map)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(get_all_flights, *params) for params in params_list]
+
+    for future_index in range(0, len(futures)):
+        flight_maps[future_index]['flights'] = futures[future_index].result()
 
     return flight_maps
 
